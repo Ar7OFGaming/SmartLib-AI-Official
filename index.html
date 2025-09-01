@@ -1,37 +1,131 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Перенаправление...</title>
-    <script type="text/javascript">
-        // Функция для извлечения параметров из URL
-        function getQueryParam(param) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(param);
+    <meta charset="UTF--TFs-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartLib AI | Авторизация</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: #121212;
+            color: #E0E0E0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
-        // Получаем chat_id
-        const chatId = getQueryParam('chat_id');
-
-        // Формируем целевой URL для Streamlit
-        const streamlitUrl = 'https://smartlib-app-fcz2i2s8uzbn2ffp5wsbhm.streamlit.app';
-
-        // Если chat_id существует, добавляем его к URL
-        if (chatId) {
-            const finalUrl = `${streamlitUrl}?chat_id=${chatId}`;
-            // Немедленно перенаправляем пользователя. 
-            // window.location.replace не оставляет страницу-прокладку в истории браузера
-            window.location.replace(finalUrl);
-        } else {
-            // Если chat_id не найден, показываем ошибку
-            document.body.innerHTML = '<h1>Ошибка: ID пользователя не найден. Пожалуйста, вернитесь в Telegram и попробуйте снова.</h1>';
+        .container {
+            text-align: center;
+            padding: 40px;
+            border-radius: 12px;
+            background-color: #1E1E1E;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+            max-width: 400px;
+            width: 100%;
         }
-    </script>
-    <!-- Дополнительный редирект для случаев, если JS отключен -->
-    <noscript>
-        <meta http-equiv="refresh" content="0;url=https://smartlib-app-fcz2i2s8uzbn2ffp5wsbhm.streamlit.app/">
-    </noscript>
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #status {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        #message {
+            font-size: 16px;
+            line-height: 1.5;
+            color: #AAAAAA;
+        }
+
+        .success #status { color: #4CAF50; }
+        .error #status { color: #F44336; }
+    </style>
 </head>
 <body>
-    <p>Пожалуйста, подождите, мы перенаправляем вас для безопасной авторизации...</p>
+    <div class="container" id="container">
+        <div class="spinner" id="spinner"></div>
+        <h1 id="status">Пожалуйста, подождите...</h1>
+        <p id="message">Мы безопасно подключаем ваш аккаунт Google. Это может занять несколько секунд.</p>
+    </div>
+
+    <script>
+        // --- ВАЖНАЯ НАСТРОЙКА ---
+        // Замените этот URL на Production URL вашего n8n-воркфлоу "Онбординг"
+        const N8N_WEBHOOK_URL = "https://goooglovskiq.app.n8n.cloud/webhook/4aa31f22-b98e-4c4c-8c0f-93077cf63726";
+        // -------------------------
+
+        // Функция для обновления интерфейса
+        function updateUI(status, message, isError = false) {
+            const container = document.getElementById('container');
+            const spinner = document.getElementById('spinner');
+            const statusEl = document.getElementById('status');
+            const messageEl = document.getElementById('message');
+
+            spinner.style.display = 'none'; // Скрываем спиннер
+            statusEl.innerText = status;
+            messageEl.innerText = message;
+            
+            if (isError) {
+                container.classList.add('error');
+            } else {
+                container.classList.add('success');
+            }
+        }
+
+        // Основная логика, которая запускается при загрузке страницы
+        window.onload = async () => {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const state = params.get('state');
+
+            // Проверяем, есть ли в URL все, что нам нужно
+            if (code && state) {
+                try {
+                    // Отправляем code и state в n8n "за кулисами"
+                    const response = await fetch(N8N_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: code, state: state })
+                    });
+
+                    // Проверяем, что n8n ответил успешно (код 200-299)
+                    if (response.ok) {
+                        updateUI("Успешно!", "Ваш аккаунт подключен. Пожалуйста, вернитесь в Telegram, я уже прислал вам следующий шаг.");
+                    } else {
+                        // Если n8n вернул ошибку (например, 500)
+                        const errorData = await response.text();
+                        console.error("n8n server error:", errorData);
+                        updateUI("Ошибка сервера", "Не удалось обработать ваш запрос. Пожалуйста, попробуйте снова из Telegram.", true);
+                    }
+                } catch (error) {
+                    // Если произошла сетевая ошибка (например, n8n недоступен)
+                    console.error("Network error:", error);
+                    updateUI("Сетевая ошибка", "Не удалось связаться с сервером. Проверьте ваше интернет-соединение и попробуйте снова.", true);
+                }
+            } else {
+                // Если в URL нет кода или state
+                updateUI("Ошибка в ссылке", "В ссылке для авторизации отсутствуют необходимые параметры. Пожалуйста, начните процесс заново из Telegram.", true);
+            }
+        };
+    </script>
 </body>
 </html>
